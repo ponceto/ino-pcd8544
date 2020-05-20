@@ -41,6 +41,15 @@ struct PCD8544_Traits
         static constexpr uint8_t  MAX_COLS   = (84 / 1);
         static constexpr uint16_t BYTE_COUNT = (MAX_ROWS * MAX_COLS);
     };
+
+    struct Initial
+    {
+        static constexpr uint8_t PREV_CHR = '\0';
+        static constexpr uint8_t CURR_ROW = 0;
+        static constexpr uint8_t CURR_COL = 0;
+        static constexpr bool    WRAP_ROW = false;
+        static constexpr bool    WRAP_COL = false;
+    };
 };
 
 // ---------------------------------------------------------------------------
@@ -63,8 +72,11 @@ struct PCD8544_Wiring
 
 struct PCD8544_Cursor
 {
-    uint8_t row;
-    uint8_t col;
+    uint8_t prev_chr;
+    uint8_t curr_row;
+    uint8_t curr_col;
+    bool    wrap_row;
+    bool    wrap_col;
 };
 
 // ---------------------------------------------------------------------------
@@ -95,7 +107,7 @@ public: // public interface
 
     void clearDisplay         ( const uint8_t value );
 
-    void putImage             ( const uint8_t* image );
+    void putImage             ( const uint8_t* image, const bool pgm );
 
     void setStdInstructionSet ( );
 

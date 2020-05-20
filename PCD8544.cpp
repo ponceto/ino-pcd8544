@@ -354,8 +354,11 @@ PCD8544::PCD8544 ( const uint8_t sclkPin
               , cselPin
               , resetPin
               , lightPin }
-    , _cursor { 0
-              , 0 }
+    , _cursor { Traits::Initial::PREV_CHR
+              , Traits::Initial::CURR_ROW
+              , Traits::Initial::CURR_COL
+              , Traits::Initial::WRAP_ROW
+              , Traits::Initial::WRAP_COL }
 {
 }
 
@@ -376,6 +379,13 @@ void PCD8544::begin()
 
 void PCD8544::reset()
 {
+    /* reset cursor values */ {
+        _cursor.prev_chr = Traits::Initial::PREV_CHR;
+        _cursor.curr_row = Traits::Initial::CURR_ROW;
+        _cursor.curr_col = Traits::Initial::CURR_COL;
+        _cursor.wrap_row = Traits::Initial::WRAP_ROW;
+        _cursor.wrap_col = Traits::Initial::WRAP_COL;
+    }
     /* initial signals state */ {
         ::digitalWrite(_wiring.cselPin , 0x1);
         ::digitalWrite(_wiring.resetPin, 0x1);
@@ -437,18 +447,27 @@ void PCD8544::clearDisplay(const uint8_t value)
     }
 }
 
-void PCD8544::putImage(const uint8_t* image)
+void PCD8544::putImage(const uint8_t* image, const bool pgm)
 {
     /* move to origin */ {
         setRowAddressOfRam(0);
         setColAddressOfRam(0);
     }
     /* send data */ {
-        const uint8_t* bytes = image;
-        uint16_t       count = Traits::Screen::BYTE_COUNT;
-        do {
-            sendData(pgm_read_byte(bytes++));
-        } while(--count != 0);
+        if(pgm != false) {
+            const uint8_t* bytes = image;
+            uint16_t       count = Traits::Screen::BYTE_COUNT;
+            do {
+                sendData(pgm_read_byte(bytes++));
+            } while(--count != 0);
+        }
+        else {
+            const uint8_t* bytes = image;
+            uint16_t       count = Traits::Screen::BYTE_COUNT;
+            do {
+                sendData(*bytes++);
+            } while(--count != 0);
+        }
     }
 }
 
@@ -517,8 +536,12 @@ void PCD8544::setInverseMode()
 
 void PCD8544::setRowAddressOfRam(const uint8_t value)
 {
+    /* adjust cursor row */ {
+        _cursor.curr_row = (value % Traits::Screen::MAX_ROWS);
+        _cursor.wrap_row = false;
+    }
     typedef Command::SetRowAddressOfRam command_traits;
-    const uint8_t operand = command_traits::operand(_cursor.row = (value % Traits::Screen::MAX_ROWS));
+    const uint8_t operand = command_traits::operand(_cursor.curr_row);
     const uint8_t command = command_traits::command(operand);
 
     sendCommand(command);
@@ -526,8 +549,12 @@ void PCD8544::setRowAddressOfRam(const uint8_t value)
 
 void PCD8544::setColAddressOfRam(const uint8_t value)
 {
+    /* adjust cursor col */ {
+        _cursor.curr_col = (value % Traits::Screen::MAX_COLS);
+        _cursor.wrap_col = false;
+    }
     typedef Command::SetColAddressOfRam command_traits;
-    const uint8_t operand = command_traits::operand(_cursor.col = (value % Traits::Screen::MAX_COLS));
+    const uint8_t operand = command_traits::operand(_cursor.curr_col);
     const uint8_t command = command_traits::command(operand);
 
     sendCommand(command);
@@ -594,30 +621,45 @@ void PCD8544::sendData(const uint8_t value)
 
 size_t PCD8544::write(uint8_t character)
 {
-    /* sanitize character */ {
-        if(character & 0x80) {
-            character = 0x7f;
-        }
+    const uint8_t curr_chr = (character & 0x80 ? 0x7f : character);
+    const uint8_t prev_chr = _cursor.prev_chr;
+
+    /* adjust cursor */ {
+        _cursor.prev_chr = curr_chr;
     }
     /* process CR/LF */ {
-        if(character == '\r') {
+        if(curr_chr == '\r') {
             return 1;
         }
-        if(character == '\n') {
-            setRowAddressOfRam(_cursor.row + 1);
-            setColAddressOfRam(_cursor.col & 0);
+        if(curr_chr == '\n') {
+            if(_cursor.wrap_col == false) {
+                setRowAddressOfRam(_cursor.curr_row + (Traits::Screen::MAX_ROWS + 1));
+            }
+            setColAddressOfRam(0);
             return 1;
+        }
+        if(prev_chr == '\r') {
+            if(_cursor.wrap_col != false) {
+                setRowAddressOfRam(_cursor.curr_row + (Traits::Screen::MAX_ROWS - 1));
+            }
+            setColAddressOfRam(0);
         }
     }
-    /* send data */ {
-        const uint8_t* bytes = &font6x8[character][0];
-        uint16_t       count = countof(font6x8[character]);
+    /* adjust cursor */ {
+        _cursor.wrap_row = false;
+        _cursor.wrap_col = false;
+    }
+    /* send data to screen */ {
+        const uint8_t* bytes = &font6x8[curr_chr][0];
+        uint16_t       count = countof(font6x8[curr_chr]);
         do {
             sendData(pgm_read_byte(bytes++));
-            if(++_cursor.col >= Traits::Screen::MAX_COLS) {
-                _cursor.col = 0;
-                if(++_cursor.row >= Traits::Screen::MAX_ROWS) {
-                    _cursor.row = 0;
+            if(++_cursor.curr_col >= Traits::Screen::MAX_COLS) {
+                _cursor.curr_col = 0;
+                _cursor.wrap_col = true;
+                if(++_cursor.curr_row >= Traits::Screen::MAX_ROWS) {
+                    _cursor.curr_row = 0;
+                    _cursor.wrap_row = true;
                 }
             }
         } while(--count != 0);
