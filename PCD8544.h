@@ -94,6 +94,8 @@ public: // public interface
             , const uint8_t resetPin
             , const uint8_t lightPin );
 
+    virtual ~PCD8544() = default;
+
     void begin();
     void reset();
     void end();
