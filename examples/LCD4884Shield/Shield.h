@@ -1,5 +1,5 @@
 /*
- * Shield.h - Copyright (c) 2014-2020 - Olivier Poncet
+ * Shield.h - Copyright (c) 2014-2025 - Olivier Poncet
  *
  * This file is part of the PCD8544 library
  *

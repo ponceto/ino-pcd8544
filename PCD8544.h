@@ -1,5 +1,5 @@
 /*
- * PCD8544.h - Copyright (c) 2014-2020 - Olivier Poncet
+ * PCD8544.h - Copyright (c) 2014-2025 - Olivier Poncet
  *
  * This file is part of the PCD8544 library
  *
